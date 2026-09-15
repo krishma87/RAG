@@ -1,12 +1,16 @@
 import os
+from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_ollama import ChatOllama
+from langchain_openai import ChatOpenAI
 from langchain_chroma import Chroma
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
+
+load_dotenv()
 
 def format_docs(docs):
     """Combines document chunks into a single text block."""
@@ -28,8 +32,23 @@ def process_pdf(pdf_path: str):
     vectorstore = Chroma.from_documents(documents=chunks, embedding=embeddings)
     return vectorstore
 
+def get_llm():
+    """Use OpenAI in hosted environments, and Ollama for local development."""
+    if os.getenv("OPENAI_API_KEY"):
+        return ChatOpenAI(
+            model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+            temperature=0,
+        )
+
+    return ChatOllama(
+        model=os.getenv("OLLAMA_MODEL", "llama3.2:1b"),
+        base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+        temperature=0,
+    )
+
+
 def get_rag_chain(vectorstore):
-    """Creates a RAG chain powered by local Ollama (Llama 3.2)."""
+    """Creates a RAG chain using the configured LLM backend."""
     retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 
     prompt = ChatPromptTemplate.from_template("""
@@ -43,12 +62,10 @@ def get_rag_chain(vectorstore):
     Question: {question}
     """)
 
-    llm = ChatOllama(model="llama3.2:1b", temperature=0)
-
     rag_chain = (
         {"context": retriever | format_docs, "question": RunnablePassthrough()}
         | prompt
-        | llm
+        | get_llm()
         | StrOutputParser()
     )
     return rag_chain
