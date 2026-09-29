@@ -10,3 +10,5 @@ python-dotenv
 tiktoken
 pymupdf
 python-docx
+reportlab
+sentence-transformers
