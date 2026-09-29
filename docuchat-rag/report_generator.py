@@ -1,12 +1,10 @@
 import os
 import re
 import io
-from dotenv import load_dotenv
-
-load_dotenv()
-
 import fitz  # PyMuPDF
-from langchain_ollama import ChatOllama
+import streamlit as st
+from dotenv import load_dotenv
+from langchain_groq import ChatGroq
 from typing import List, Dict
 
 # ReportLab imports for generating styled PDFs
@@ -15,13 +13,17 @@ from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
-# Initialize local LLM
-llm = ChatOllama(
-    model=os.getenv("OLLAMA_MODEL", "llama3.2:1b"),
-    base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
-    temperature=0,
-    num_ctx=4096,
-    num_predict=512
+load_dotenv()
+
+# Check both environment variable and Streamlit secrets
+groq_api_key = os.getenv("GROQ_API_KEY")
+if not groq_api_key and "GROQ_API_KEY" in st.secrets:
+    groq_api_key = st.secrets["GROQ_API_KEY"]
+
+llm = ChatGroq(
+    model="llama-3.1-8b-instant",
+    api_key=groq_api_key,
+    temperature=0
 )
 
 EXTRACTION_PROMPT = """
@@ -64,10 +66,10 @@ def extract_from_pdf(file_bytes: bytes, filename: str, requirements: str) -> Dic
         if any(kw in text.lower() for kw in keywords) or page_num < 2:
             matched_pages.append(text)
             
-    condensed_text = "\n".join(matched_pages)[:8000]
+    condensed_text = "\n".join(matched_pages)[:12000]
     
     if not condensed_text.strip():
-        condensed_text = "\n".join([doc[i].get_text() for i in range(min(2, total_pages))])[:8000]
+        condensed_text = "\n".join([doc[i].get_text() for i in range(min(2, total_pages))])[:12000]
 
     prompt = EXTRACTION_PROMPT.format(
         filename=filename,
