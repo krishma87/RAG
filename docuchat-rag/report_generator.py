@@ -27,13 +27,16 @@ def get_groq_api_key():
         pass
     return None
 
-groq_api_key = get_groq_api_key()
-
-llm = ChatGroq(
-    model="llama-3.1-8b-instant",
-    api_key=groq_api_key,
-    temperature=0
-)
+def get_llm():
+    """Initializes the LLM on-demand to avoid crashing during module import."""
+    key = get_groq_api_key()
+    if not key:
+        raise ValueError("GROQ_API_KEY is not set. Please add it to your .env file or Streamlit Cloud Secrets.")
+    return ChatGroq(
+        model="llama-3.1-8b-instant",
+        api_key=key,
+        temperature=0
+    )
 
 EXTRACTION_PROMPT = """
 You are analyzing the document: "{filename}".
@@ -63,6 +66,7 @@ Rules:
 
 def extract_from_pdf(file_bytes: bytes, filename: str, requirements: str) -> Dict[str, str]:
     """Scans and extracts only the relevant sections to reduce token load."""
+    llm = get_llm()
     doc = fitz.open(stream=file_bytes, filetype="pdf")
     
     keywords = [w.lower().strip(".,:;!?") for w in requirements.split() if len(w) > 3][:8]
@@ -91,6 +95,7 @@ def extract_from_pdf(file_bytes: bytes, filename: str, requirements: str) -> Dic
 
 def generate_multi_doc_report(uploaded_files, requirements: str) -> str:
     """Processes uploaded files and generates the consolidated report."""
+    llm = get_llm()
     extracted_data = []
 
     for file in uploaded_files:
