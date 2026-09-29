@@ -8,3 +8,5 @@ langchain-ollama
 pypdf
 python-dotenv
 tiktoken
+pymupdf
+python-docx

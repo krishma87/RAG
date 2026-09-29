@@ -18,3 +18,8 @@ Thumbs.db
 
 # Project
 *.log
+
+venv/
+__pycache__/
+*.pyc
+.env
