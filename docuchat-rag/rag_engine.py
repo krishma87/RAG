@@ -59,7 +59,7 @@ def get_rag_chain(vectorstore):
     groq_api_key = get_groq_api_key()
 
     llm = ChatGroq(
-        model="llama-3.1-8b-instant",
+        model="llama-3.3-70b-versatile",
         api_key=groq_api_key,
         temperature=0
     )
