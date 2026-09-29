@@ -52,7 +52,7 @@ def get_llm():
             continue
             
     return ChatGroq(
-        model="llama-3.1-8b-instant",
+        model="llama-3.1-8b-instant"  # ✅ Correct ('m')
         api_key=key,
         temperature=0
     )
