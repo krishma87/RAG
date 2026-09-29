@@ -15,6 +15,12 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
 load_dotenv()
 
+CANDIDATE_MODELS = [
+    "llama-3.1-8b-instant",
+    "llama-3.3-70b-versatile",
+    "llama3-8b-8192"
+]
+
 def get_groq_api_key():
     """Safely retrieves the Groq API key from environment variables or Streamlit secrets."""
     key = os.getenv("GROQ_API_KEY")
@@ -28,12 +34,25 @@ def get_groq_api_key():
     return None
 
 def get_llm():
-    """Initializes the LLM on-demand to avoid crashing during module import."""
+    """Initializes LLM on-demand with automatic fallback to prevent 404 errors."""
     key = get_groq_api_key()
     if not key:
         raise ValueError("GROQ_API_KEY is not set. Please add it to your .env file or Streamlit Cloud Secrets.")
+    
+    for model_name in CANDIDATE_MODELS:
+        try:
+            test_llm = ChatGroq(
+                model=model_name,
+                api_key=key,
+                temperature=0
+            )
+            test_llm.invoke("hi")
+            return test_llm
+        except Exception:
+            continue
+            
     return ChatGroq(
-        model="llama-3.3-70b-versatile",
+        model="llama-3.1-8b-instant",
         api_key=key,
         temperature=0
     )
