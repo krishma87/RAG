@@ -12,3 +12,4 @@ pymupdf
 python-docx
 reportlab
 sentence-transformers
+torchvision
