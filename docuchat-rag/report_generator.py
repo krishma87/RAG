@@ -15,10 +15,19 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
 load_dotenv()
 
-# Check both environment variable and Streamlit secrets
-groq_api_key = os.getenv("GROQ_API_KEY")
-if not groq_api_key and "GROQ_API_KEY" in st.secrets:
-    groq_api_key = st.secrets["GROQ_API_KEY"]
+def get_groq_api_key():
+    """Safely retrieves the Groq API key from environment variables or Streamlit secrets."""
+    key = os.getenv("GROQ_API_KEY")
+    if key:
+        return key
+    try:
+        if hasattr(st, "secrets") and "GROQ_API_KEY" in st.secrets:
+            return st.secrets["GROQ_API_KEY"]
+    except Exception:
+        pass
+    return None
+
+groq_api_key = get_groq_api_key()
 
 llm = ChatGroq(
     model="llama-3.1-8b-instant",

@@ -9,6 +9,18 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 
+def get_groq_api_key():
+    """Safely retrieves the Groq API key from environment variables or Streamlit secrets."""
+    key = os.getenv("GROQ_API_KEY")
+    if key:
+        return key
+    try:
+        if hasattr(st, "secrets") and "GROQ_API_KEY" in st.secrets:
+            return st.secrets["GROQ_API_KEY"]
+    except Exception:
+        pass
+    return None
+
 def format_docs(docs):
     """Combines document chunks into a single text block."""
     return "\n\n".join(doc.page_content for doc in docs)
@@ -44,10 +56,7 @@ def get_rag_chain(vectorstore):
     Question: {question}
     """)
 
-    # Check both environment variable and Streamlit secrets for deployment
-    groq_api_key = os.getenv("GROQ_API_KEY")
-    if not groq_api_key and "GROQ_API_KEY" in st.secrets:
-        groq_api_key = st.secrets["GROQ_API_KEY"]
+    groq_api_key = get_groq_api_key()
 
     llm = ChatGroq(
         model="llama-3.1-8b-instant",
