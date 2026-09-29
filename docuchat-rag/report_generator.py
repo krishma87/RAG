@@ -3,6 +3,7 @@ import re
 import io
 import fitz  # PyMuPDF
 import streamlit as st
+import requests
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 from typing import List, Dict
@@ -15,14 +16,8 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
 load_dotenv()
 
-CANDIDATE_MODELS = [
-    "llama-3.1-8b-instant",
-    "llama-3.3-70b-versatile",
-    "llama3-8b-8192"
-]
-
 def get_groq_api_key():
-    """Safely retrieves the Groq API key from environment variables or Streamlit secrets."""
+    """Safely retrieves the Groq API key from environment or secrets."""
     key = os.getenv("GROQ_API_KEY")
     if key:
         return key
@@ -33,26 +28,40 @@ def get_groq_api_key():
         pass
     return None
 
+def get_available_groq_model(api_key: str) -> str:
+    """Queries Groq API dynamically to find an active model available to this account."""
+    preferred_models = [
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
+        "llama3-70b-8192",
+        "llama3-8b-8192",
+        "mixtral-8x7b-32768",
+        "gemma2-9b-it"
+    ]
+    try:
+        headers = {"Authorization": f"Bearer {api_key}"}
+        response = requests.get("https://api.groq.com/openai/v1/models", headers=headers, timeout=5)
+        if response.status_code == 200:
+            available_ids = [m["id"] for m in response.json().get("data", [])]
+            for pref in preferred_models:
+                if pref in available_ids:
+                    return pref
+            for m_id in available_ids:
+                if "whisper" not in m_id and "guard" not in m_id:
+                    return m_id
+    except Exception:
+        pass
+    return "llama3-8b-8192"
+
 def get_llm():
-    """Initializes LLM on-demand with automatic fallback to prevent 404 errors."""
+    """Initializes LLM on-demand using dynamically validated model name."""
     key = get_groq_api_key()
     if not key:
         raise ValueError("GROQ_API_KEY is not set. Please add it to your .env file or Streamlit Cloud Secrets.")
     
-    for model_name in CANDIDATE_MODELS:
-        try:
-            test_llm = ChatGroq(
-                model=model_name,
-                api_key=key,
-                temperature=0
-            )
-            test_llm.invoke("hi")
-            return test_llm
-        except Exception:
-            continue
-            
+    model_name = get_available_groq_model(key)
     return ChatGroq(
-        model="llama-3.3-70b-versatile",
+        model=model_name,
         api_key=key,
         temperature=0
     )

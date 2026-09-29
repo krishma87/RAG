@@ -1,5 +1,6 @@
 import os
 import streamlit as st
+import requests
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -9,15 +10,8 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 
-# Ordered list of supported models to try
-CANDIDATE_MODELS = [
-    "llama-3.1-8b-instant",
-    "llama-3.3-70b-versatile",
-    "llama3-8b-8192"
-]
-
 def get_groq_api_key():
-    """Safely retrieves the Groq API key from environment variables or Streamlit secrets."""
+    """Safely retrieves the Groq API key from environment or secrets."""
     key = os.getenv("GROQ_API_KEY")
     if key:
         return key
@@ -27,6 +21,32 @@ def get_groq_api_key():
     except Exception:
         pass
     return None
+
+def get_available_groq_model(api_key: str) -> str:
+    """Queries Groq API dynamically to find an active model available to this account."""
+    preferred_models = [
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
+        "llama3-70b-8192",
+        "llama3-8b-8192",
+        "mixtral-8x7b-32768",
+        "gemma2-9b-it"
+    ]
+    try:
+        headers = {"Authorization": f"Bearer {api_key}"}
+        response = requests.get("https://api.groq.com/openai/v1/models", headers=headers, timeout=5)
+        if response.status_code == 200:
+            available_ids = [m["id"] for m in response.json().get("data", [])]
+            for pref in preferred_models:
+                if pref in available_ids:
+                    return pref
+            # Fall back to any text chat model in the list
+            for m_id in available_ids:
+                if "whisper" not in m_id and "guard" not in m_id:
+                    return m_id
+    except Exception:
+        pass
+    return "llama3-8b-8192"
 
 def format_docs(docs):
     """Combines document chunks into a single text block."""
@@ -49,7 +69,7 @@ def process_pdf(pdf_path: str):
     return vectorstore
 
 def get_rag_chain(vectorstore):
-    """Creates a RAG chain powered by Groq with model fallback."""
+    """Creates a RAG chain powered by Groq with auto-detected model ID."""
     retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 
     prompt = ChatPromptTemplate.from_template("""
@@ -67,34 +87,18 @@ def get_rag_chain(vectorstore):
     if not groq_api_key:
         raise ValueError("GROQ_API_KEY is missing. Please add it to your .env file or Streamlit Cloud Secrets.")
 
-    # Find the first model available to this key
-    active_llm = None
-    for model_name in CANDIDATE_MODELS:
-        try:
-            test_llm = ChatGroq(
-                model=model_name,
-                api_key=groq_api_key,
-                temperature=0
-            )
-            # Lightweight ping to verify model availability
-            test_llm.invoke("hi")
-            active_llm = test_llm
-            break
-        except Exception:
-            continue
+    model_name = get_available_groq_model(groq_api_key)
 
-    if active_llm is None:
-        # Fall back to primary instant model if network ping fails
-        active_llm = ChatGroq(
-            model="llama-3.3-70b-versatile",
-            api_key=groq_api_key,
-            temperature=0
-        )
+    llm = ChatGroq(
+        model=model_name,
+        api_key=groq_api_key,
+        temperature=0
+    )
 
     rag_chain = (
         {"context": retriever | format_docs, "question": RunnablePassthrough()}
         | prompt
-        | active_llm
+        | llm
         | StrOutputParser()
     )
     return rag_chain
