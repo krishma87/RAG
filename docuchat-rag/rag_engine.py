@@ -23,25 +23,28 @@ def get_groq_api_key():
     return None
 
 def get_available_groq_model(api_key: str) -> str:
-    """Selects a verified standard Groq chat model that does not require third-party terms."""
-    safe_standard_models = [
-        "llama-3.1-8b-instant",
+    """Finds an active, unrestricted production chat model on this Groq account."""
+    preferred_models = [
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
+        "qwen/qwen3.8-27b",
         "llama-3.3-70b-versatile",
-        "llama3-70b-8192",
-        "llama3-8b-8192",
-        "mixtral-8x7b-32768"
+        "llama-3.1-8b-instant"
     ]
     try:
         headers = {"Authorization": f"Bearer {api_key}"}
         response = requests.get("https://api.groq.com/openai/v1/models", headers=headers, timeout=5)
         if response.status_code == 200:
             available_ids = [m["id"] for m in response.json().get("data", [])]
-            for safe_model in safe_standard_models:
-                if safe_model in available_ids:
-                    return safe_model
+            for pref in preferred_models:
+                if pref in available_ids:
+                    return pref
+            for m_id in available_ids:
+                if not any(blocked in m_id.lower() for blocked in ["whisper", "guard", "orpheus", "canopylabs"]):
+                    return m_id
     except Exception:
         pass
-    return "llama-3.1-8b-instant"
+    return "openai/gpt-oss-120b"
 
 def format_docs(docs):
     """Combines document chunks into a single text block."""
@@ -64,7 +67,7 @@ def process_pdf(pdf_path: str):
     return vectorstore
 
 def get_rag_chain(vectorstore):
-    """Creates a RAG chain powered by Groq with auto-detected model ID."""
+    """Creates a RAG chain powered by Groq with an active model."""
     retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 
     prompt = ChatPromptTemplate.from_template("""
