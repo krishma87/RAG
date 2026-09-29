@@ -29,29 +29,25 @@ def get_groq_api_key():
     return None
 
 def get_available_groq_model(api_key: str) -> str:
-    """Queries Groq API dynamically to find an active model available to this account."""
-    preferred_models = [
-        "llama-3.3-70b-versatile",
+    """Selects a verified standard Groq chat model that does not require third-party terms."""
+    safe_standard_models = [
         "llama-3.1-8b-instant",
+        "llama-3.3-70b-versatile",
         "llama3-70b-8192",
         "llama3-8b-8192",
-        "mixtral-8x7b-32768",
-        "gemma2-9b-it"
+        "mixtral-8x7b-32768"
     ]
     try:
         headers = {"Authorization": f"Bearer {api_key}"}
         response = requests.get("https://api.groq.com/openai/v1/models", headers=headers, timeout=5)
         if response.status_code == 200:
             available_ids = [m["id"] for m in response.json().get("data", [])]
-            for pref in preferred_models:
-                if pref in available_ids:
-                    return pref
-            for m_id in available_ids:
-                if "whisper" not in m_id and "guard" not in m_id:
-                    return m_id
+            for safe_model in safe_standard_models:
+                if safe_model in available_ids:
+                    return safe_model
     except Exception:
         pass
-    return "llama3-8b-8192"
+    return "llama-3.1-8b-instant"
 
 def get_llm():
     """Initializes LLM on-demand using dynamically validated model name."""
