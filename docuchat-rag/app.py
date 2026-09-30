@@ -91,41 +91,11 @@ elif app_mode == "Multi-Doc Report Generator":
                     "4. Final Strategic Recommendations."
     )
 
+    # Keep only THIS single button:
     if st.button("Generate Consolidated Report", type="primary"):
         if not uploaded_files:
-            st.error("Please upload at least one PDF file.")
-        elif not custom_requirements.strip():
-            st.error("Please provide your report requirements/instructions.")
-        else:
-            with st.spinner(f"Reading, extracting, and synthesizing content from {len(uploaded_files)} files..."):
-                try:
-                    report = generate_multi_doc_report(uploaded_files, custom_requirements)
-                    st.session_state["generated_report"] = report
-                except Exception as e:
-                    st.error(f"Failed to generate report: {e}")
-
-    # Display results and download options
-    if "generated_report" in st.session_state and st.session_state["generated_report"]:
-        st.markdown("---")
-        st.subheader("Generated Report")
-
-        # Styled Blue-and-White Card Preview
-        st.markdown(
-            f"""
-            <div style="background-color: #F8FAFC; border: 1px solid #CBD5E1; border-left: 6px solid #2563EB; padding: 20px; border-radius: 8px;">
-                {st.session_state["generated_report"]}
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-        st.write("") # spacing
-
-        # Display results, allow live editing, and handle downloads
-    if st.button("Generate Consolidated Report"):
-        if not uploaded_files:
             st.warning("Please upload at least one PDF report.")
-        elif not requirements.strip():
+        elif not custom_requirements.strip():
             st.warning("Please enter your structure and extraction requirements.")
         else:
             with st.spinner("Analyzing documents and compiling report..."):
@@ -135,27 +105,25 @@ elif app_mode == "Multi-Doc Report Generator":
                 except Exception as e:
                     st.error(f"Failed to generate report: {e}")
 
-    # Display editable area and download button if a report exists in session state
+    # Editable area & download button appear once the report is generated
     if "generated_report" in st.session_state and st.session_state["generated_report"]:
+        st.markdown("---")
         st.subheader("Edit & Finalize Report")
-        
-        # 1. Editable Text Box
+
+        # 1. Editable text area
         edited_report = st.text_area(
             "Modify the generated report before downloading:",
             value=st.session_state["generated_report"],
             height=350,
             key="edited_report_content"
         )
-        
-        # Keep state synchronized with edits
         st.session_state["generated_report"] = edited_report
 
-        # 2. PDF Generation & Download Button
+        # 2. Download PDF button
         try:
             pdf_bytes = create_styled_pdf(edited_report)
-            
             st.download_button(
-                label="📥 Download Final PDF Report",
+                label="Download Final PDF Report",
                 data=pdf_bytes,
                 file_name="Consolidated_Report.pdf",
                 mime="application/pdf",
