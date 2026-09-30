@@ -223,3 +223,88 @@ def create_styled_pdf(markdown_text: str) -> bytes:
     doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
+
+def create_styled_pdf(markdown_text: str) -> bytes:
+    """Converts markdown report text into a styled PDF document."""
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=letter,
+        rightMargin=40,
+        leftMargin=40,
+        topMargin=40,
+        bottomMargin=40
+    )
+
+    styles = getSampleStyleSheet()
+
+    title_style = ParagraphStyle(
+        'DocTitle',
+        parent=styles['Heading1'],
+        fontName='Helvetica-Bold',
+        fontSize=18,
+        leading=22,
+        textColor=colors.HexColor('#1E3A8A'),
+        spaceAfter=12
+    )
+    
+    h2_style = ParagraphStyle(
+        'DocH2',
+        parent=styles['Heading2'],
+        fontName='Helvetica-Bold',
+        fontSize=13,
+        leading=16,
+        textColor=colors.HexColor('#2563EB'),
+        spaceBefore=10,
+        spaceAfter=5
+    )
+
+    body_style = ParagraphStyle(
+        'DocBody',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=10,
+        leading=14,
+        textColor=colors.HexColor('#1F2937'),
+        spaceAfter=6
+    )
+
+    bullet_style = ParagraphStyle(
+        'DocBullet',
+        parent=body_style,
+        leftIndent=15,
+        firstLineIndent=-10,
+        spaceAfter=4
+    )
+
+    story = []
+    lines = markdown_text.split('\n')
+
+    for line in lines:
+        clean = line.strip()
+        if not clean:
+            story.append(Spacer(1, 6))
+            continue
+
+        # Escape raw XML characters before applying tags
+        clean = clean.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+        # Convert markdown bold/italics
+        clean = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', clean)
+        clean = re.sub(r'\*(.*?)\*', r'<i>\1</i>', clean)
+
+        if clean.startswith('# '):
+            story.append(Paragraph(clean[2:], title_style))
+        elif clean.startswith('## '):
+            story.append(Paragraph(clean[3:], h2_style))
+        elif clean.startswith('### '):
+            story.append(Paragraph(clean[4:], h2_style))
+        elif clean.startswith(('-', '*')) and not clean.startswith('---'):
+            bullet_text = f"&bull; {clean.lstrip('-*').strip()}"
+            story.append(Paragraph(bullet_text, bullet_style))
+        else:
+            story.append(Paragraph(clean, body_style))
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()

@@ -122,41 +122,44 @@ elif app_mode == "Multi-Doc Report Generator":
         st.write("") # spacing
 
         # Display results, allow live editing, and handle downloads
-    if "generated_report" in st.session_state and st.session_state["generated_report"]:
-        st.markdown("---")
-        st.subheader("Edit & Finalize Report")
-        st.caption("You can edit the text directly in the box below before downloading.")
+    if st.button("Generate Consolidated Report"):
+        if not uploaded_files:
+            st.warning("Please upload at least one PDF report.")
+        elif not requirements.strip():
+            st.warning("Please enter your structure and extraction requirements.")
+        else:
+            with st.spinner("Analyzing documents and compiling report..."):
+                try:
+                    report_text = generate_multi_doc_report(uploaded_files, requirements)
+                    st.session_state["generated_report"] = report_text
+                except Exception as e:
+                    st.error(f"Failed to generate report: {e}")
 
-        # 1. Editable Text Box loaded with the AI-generated report
+    # Display editable area and download button if a report exists in session state
+    if "generated_report" in st.session_state and st.session_state["generated_report"]:
+        st.subheader("Edit & Finalize Report")
+        
+        # 1. Editable Text Box
         edited_report = st.text_area(
-            label="Report Content (Markdown supported)",
+            "Modify the generated report before downloading:",
             value=st.session_state["generated_report"],
             height=350,
-            key="report_editor"
+            key="edited_report_content"
         )
+        
+        # Keep state synchronized with edits
+        st.session_state["generated_report"] = edited_report
 
-        # 2. Live formatted preview of your edits
-        with st.expander("Preview Formatted Output", expanded=False):
-            with st.container(border=True):
-                st.markdown(edited_report)
-
-        st.write("")
-
-        # 3. Generate PDF dynamically using the EDITED text
-        pdf_bytes = create_styled_pdf(edited_report)
-
-        col1, col2 = st.columns([1, 1])
-        with col1:
+        # 2. PDF Generation & Download Button
+        try:
+            pdf_bytes = create_styled_pdf(edited_report)
+            
             st.download_button(
-                label="Download Edited PDF",
+                label="📥 Download Final PDF Report",
                 data=pdf_bytes,
-                file_name="consolidated_summary_report.pdf",
-                mime="application/pdf"
+                file_name="Consolidated_Report.pdf",
+                mime="application/pdf",
+                use_container_width=True
             )
-        with col2:
-            st.download_button(
-                label="Download Edited Markdown (.md)",
-                data=edited_report,
-                file_name="consolidated_summary_report.md",
-                mime="text/markdown"
-            )
+        except Exception as e:
+            st.error(f"Error generating PDF file: {e}")
