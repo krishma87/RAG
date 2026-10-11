@@ -4,98 +4,124 @@ import os
 from rag_engine import process_pdf, get_rag_chain
 from report_generator import generate_multi_doc_report, create_styled_pdf
 
-st.set_page_config(page_title="DocuChat AI - Assistant & Report Generator", layout="wide")
+st.set_page_config(
+    page_title="DocuChat AI - Assistant & Report Generator",
+    layout="wide"
+)
 
-# Sidebar navigation mode
+# Sidebar Navigation
 st.sidebar.title("Navigation")
-app_mode = st.sidebar.radio(
+feature = st.sidebar.radio(
     "Select Feature",
     ["Single PDF Q&A", "Multi-Doc Report Generator"]
 )
 
-# =========================================================
-# FEATURE 1: Single PDF Q&A (Existing Workflow)
-# =========================================================
-if app_mode == "Single PDF Q&A":
+# ---------------------------------------------------------
+# Feature 1: Single PDF Q&A
+# ---------------------------------------------------------
+if feature == "Single PDF Q&A":
     st.title("Document Chat AI - PDF Assistant")
 
     with st.sidebar:
         st.header("Document Upload")
-        uploaded_file = st.file_uploader("Upload a PDF file", type=["pdf"], key="single_pdf")
+        uploaded_file = st.file_uploader("Upload a PDF file", type=["pdf"])
+
+        if st.button("Clear Chat History", use_container_width=True):
+            st.session_state["chat_history"] = []
+            st.rerun()
 
     if "chat_history" not in st.session_state:
-        st.session_state.chat_history = []
+        st.session_state["chat_history"] = []
     if "rag_chain" not in st.session_state:
-        st.session_state.rag_chain = None
+        st.session_state["rag_chain"] = None
+    if "current_file_name" not in st.session_state:
+        st.session_state["current_file_name"] = None
 
-    # Process uploaded document
-    if uploaded_file and st.session_state.rag_chain is None:
-        with st.spinner("Processing document and generating embeddings..."):
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-                tmp_file.write(uploaded_file.read())
-                tmp_path = tmp_file.name
+    if uploaded_file is not None:
+        if st.session_state["current_file_name"] != uploaded_file.name:
+            st.session_state["chat_history"] = []
+            st.session_state["rag_chain"] = None
+            st.session_state["current_file_name"] = uploaded_file.name
 
-            try:
-                vectorstore = process_pdf(tmp_path)
-                st.session_state.rag_chain = get_rag_chain(vectorstore)
-                st.sidebar.success("Document indexed successfully!")
-            except Exception as e:
-                st.sidebar.error(f"Error: {e}")
-            finally:
-                if os.path.exists(tmp_path):
-                    os.remove(tmp_path)
+            with st.spinner(f"Indexing '{uploaded_file.name}' and building vector store..."):
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+                    tmp_file.write(uploaded_file.read())
+                    tmp_path = tmp_file.name
 
-    # Display chat history
-    for message in st.session_state.chat_history:
-        with st.chat_message(message["role"]):
+                try:
+                    vectorstore = process_pdf(tmp_path)
+                    st.session_state["rag_chain"] = get_rag_chain(vectorstore)
+                    st.sidebar.success(f"Indexed: {uploaded_file.name}")
+                except Exception as e:
+                    st.sidebar.error(f"Error processing file: {e}")
+                finally:
+                    if os.path.exists(tmp_path):
+                        os.remove(tmp_path)
+
+    if uploaded_file and st.session_state["rag_chain"]:
+        st.info(f" **Active Document:** `{uploaded_file.name}` ({round(uploaded_file.size / 1024, 1)} KB)")
+        if not st.session_state["chat_history"]:
+            st.markdown(
+                """
+                > **Suggested Queries:**
+                > - *Summarize the key findings and conclusions of this document.*
+                > - *Explain the technical architecture and core methodology.*
+                > - *List all actionable recommendations or critical requirements.*
+                """
+            )
+    elif not uploaded_file:
+        st.info("Upload a PDF document in the sidebar to begin analysis.")
+
+    for message in st.session_state["chat_history"]:
+        avatar = "👤" if message["role"] == "user" else "🤖"
+        with st.chat_message(message["role"], avatar=avatar):
             st.markdown(message["content"])
 
-    # Chat input handling
     if user_query := st.chat_input("Ask a question about your document..."):
-        if st.session_state.rag_chain is None:
-            st.warning("Please upload a valid PDF document first in the sidebar!")
+        if st.session_state["rag_chain"] is None:
+            st.warning("Please upload a valid PDF document in the sidebar first.")
         else:
-            st.chat_message("user").markdown(user_query)
-            st.session_state.chat_history.append({"role": "user", "content": user_query})
+            st.chat_message("user", avatar="👤").markdown(user_query)
+            st.session_state["chat_history"].append({"role": "user", "content": user_query})
 
-            with st.chat_message("assistant"):
+            with st.chat_message("assistant", avatar="🤖"):
                 with st.spinner("Searching document & generating answer..."):
                     try:
-                        answer = st.session_state.rag_chain.invoke(user_query)
+                        answer = st.session_state["rag_chain"].invoke(user_query)
                         st.markdown(answer)
-                        st.session_state.chat_history.append({"role": "assistant", "content": answer})
+                        st.session_state["chat_history"].append({"role": "assistant", "content": answer})
                     except Exception as e:
                         st.error(f"Error querying model: {e}")
 
-# =========================================================
-# FEATURE 2: Multi-Document Custom Report Generator
-# =========================================================
-elif app_mode == "Multi-Doc Report Generator":
+# ---------------------------------------------------------
+# Feature 2: Multi-Doc Custom Report Generator
+# ---------------------------------------------------------
+elif feature == "Multi-Doc Report Generator":
     st.title("Multi-Document Custom Report Generator")
-    st.caption("Upload multiple PDFs (e.g., 14 reports) and generate a unified summary tailored to your format requirements.")
+    st.write("Upload multiple PDFs (e.g., 14 reports) and generate a unified summary tailored to your format requirements.")
 
     uploaded_files = st.file_uploader(
         "Upload PDF Reports (Max 200MB each)",
         type=["pdf"],
-        accept_multiple_files=True,
-        key="multi_pdf"
+        accept_multiple_files=True
     )
 
-    custom_requirements = st.text_area(
+    requirements = st.text_area(
         "Define Your Report Structure & Extraction Requirements",
-        height=180,
-        placeholder="Example:\n"
-                    "1. Executive Summary: Core takeaways across all documents.\n"
-                    "2. Comparison Table: Columns for Document Name, Metric X, Metric Y, Status.\n"
-                    "3. Key Risks & Action Items: Bulleted points extracted per file.\n"
-                    "4. Final Strategic Recommendations."
+        value=(
+            "1. Overview of Scope:\n"
+            "- What scope or domain does each document address?\n\n"
+            "2. Detailed Criteria Extraction:\n"
+            "- Technical architecture, threat vectors, or security measures.\n"
+            "- Operational arrangements, schedules, rules, or requirements."
+        ),
+        height=180
     )
 
-    # Keep only THIS single button:
     if st.button("Generate Consolidated Report", type="primary"):
         if not uploaded_files:
             st.warning("Please upload at least one PDF report.")
-        elif not custom_requirements.strip():
+        elif not requirements or not requirements.strip():
             st.warning("Please enter your structure and extraction requirements.")
         else:
             with st.spinner("Analyzing documents and compiling report..."):
@@ -105,12 +131,11 @@ elif app_mode == "Multi-Doc Report Generator":
                 except Exception as e:
                     st.error(f"Failed to generate report: {e}")
 
-    # Editable area & download button appear once the report is generated
+    # Editable Area & Download PDF
     if "generated_report" in st.session_state and st.session_state["generated_report"]:
         st.markdown("---")
         st.subheader("Edit & Finalize Report")
 
-        # 1. Editable text area
         edited_report = st.text_area(
             "Modify the generated report before downloading:",
             value=st.session_state["generated_report"],
@@ -119,7 +144,6 @@ elif app_mode == "Multi-Doc Report Generator":
         )
         st.session_state["generated_report"] = edited_report
 
-        # 2. Download PDF button
         try:
             pdf_bytes = create_styled_pdf(edited_report)
             st.download_button(
